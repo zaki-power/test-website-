@@ -16,8 +16,23 @@ export default function Page() {
   const [copied, setCopied] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
+  const [testDetails, setTestDetails] = useState<any>(null)
+
   const checkAuth = async () => {
     const token = getCookie('access_token')
+    const testId = process.env.NEXT_PUBLIC_QUIZ_TEST_ID || '1'
+
+    // Fetch Test Details (publicly or with token)
+    try {
+      const testResponse = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api'}/company/test/${testId}/`)
+      if (testResponse.ok) {
+        const testData = await testResponse.json()
+        setTestDetails(testData)
+      }
+    } catch (err) {
+      console.error('Failed to fetch test details:', err)
+    }
+
     if (token) {
       const djangoUser = await getCurrentUser(token)
       setUser(djangoUser)
@@ -31,19 +46,21 @@ export default function Page() {
             },
           })
           if (response.ok) {
-            const submissions = await response.json()
-            // For now, if there's any submission, we consider it "completed"
-            // In a real app, we'd filter by the specific test_id for this quiz
-            if (submissions && submissions.length > 0) {
-              const lastSubmission = submissions[submissions.length - 1]
-              setAttemptHistory({
-                passed: lastSubmission.flag_verification === 'verified',
-                submission_flag: lastSubmission.submitted_flag,
-                // Score is not available in Django Submission model, so we use dummy data or hide it
-                score_percentage: 0, 
-                correct_answers: 0,
-                total_questions: 30,
-              })
+            const responseData = await response.json()
+            if (responseData.status && responseData.data) {
+              // Find submission for THIS specific test
+              const currentSubmission = responseData.data.find((s: any) => s.test?.id?.toString() === testId || s.id?.toString() === testId) 
+              // Note: submission serialization might vary, checking both id and test.id
+              
+              if (currentSubmission) {
+                setAttemptHistory({
+                  passed: currentSubmission.flag_verification === 'verified',
+                  submission_flag: currentSubmission.submitted_flag,
+                  score_percentage: null,
+                  correct_answers: null,
+                  total_questions: 30,
+                })
+              }
             }
           }
         } catch (err) {
@@ -127,14 +144,14 @@ export default function Page() {
           <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
             <div className="space-y-6">
               <h1 className="text-5xl font-bold text-white leading-tight">
-                Professional Developer <span className="text-blue-400">Certification Quiz</span>
+                {testDetails?.job_title || 'Professional Developer'} <span className="text-blue-400">Certification Quiz</span>
               </h1>
               <p className="text-xl text-slate-300">
-                Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.
+                {testDetails?.description || 'Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.'}
               </p>
               <div className="space-y-3 mt-6">
                 <p className="text-slate-400 text-sm font-medium">Required Score: 75% (22 out of 30 questions)</p>
-                <p className="text-slate-400 text-sm font-medium">Time Limit: 60 minutes</p>
+                <p className="text-slate-400 text-sm font-medium">Time Limit: {testDetails?.test_duration_min || 60} minutes</p>
                 <p className="text-slate-400 text-sm font-medium">Important: You can take this test only once. Make sure you are ready before starting.</p>
               </div>
             </div>
@@ -155,12 +172,16 @@ export default function Page() {
                 Thank you for taking our professional developer certification quiz. Your results are final and you cannot retake the test.
               </p>
               <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-2">
-                <p className="text-slate-400 text-sm">
-                  <span className="font-semibold">Score:</span> {attemptHistory.score_percentage}%
-                </p>
-                <p className="text-slate-400 text-sm">
-                  <span className="font-semibold">Correct Answers:</span> {attemptHistory.correct_answers} / {attemptHistory.total_questions}
-                </p>
+                {attemptHistory.score_percentage !== null && (
+                  <p className="text-slate-400 text-sm">
+                    <span className="font-semibold">Score:</span> {attemptHistory.score_percentage}%
+                  </p>
+                )}
+                {attemptHistory.correct_answers !== null && (
+                  <p className="text-slate-400 text-sm">
+                    <span className="font-semibold">Correct Answers:</span> {attemptHistory.correct_answers} / {attemptHistory.total_questions}
+                  </p>
+                )}
                 <p className="text-slate-400 text-sm">
                   <span className="font-semibold">Status:</span> {attemptHistory.passed ? 'PASSED' : 'FAILED'}
                 </p>
@@ -215,11 +236,11 @@ export default function Page() {
                 Ready to Test Your <span className="text-blue-400">Expertise?</span>
               </h1>
               <p className="text-xl text-slate-300">
-                Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.
+                {testDetails?.description || 'Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.'}
               </p>
               <div className="space-y-3 mt-6">
                 <p className="text-slate-400 text-sm font-medium">Required Score: 75% (22 out of 30 questions)</p>
-                <p className="text-slate-400 text-sm font-medium">Time Limit: 60 minutes</p>
+                <p className="text-slate-400 text-sm font-medium">Time Limit: {testDetails?.test_duration_min || 60} minutes</p>
                 <p className="text-slate-400 text-sm font-medium text-orange-400">Important: You can take this test only once. Make sure you are ready before starting.</p>
               </div>
               <Button
@@ -258,7 +279,7 @@ export default function Page() {
                     <Clock className="w-6 h-6 text-orange-400 flex-shrink-0 mt-1" />
                     <div>
                       <p className="text-slate-400 text-sm">Estimated Duration</p>
-                      <p className="text-white font-semibold text-lg">45-60 minutes</p>
+                      <p className="text-white font-semibold text-lg">{testDetails?.test_duration_min || 60} minutes</p>
                     </div>
                   </div>
 
