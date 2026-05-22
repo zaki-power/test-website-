@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { CheckCircle, BookOpen, Award, Clock, Copy, CheckCircle2 } from 'lucide-react'
-import { SignInForm } from '@/components/auth/sign-in-form'
 import { getCurrentUser, getCookie, logout } from '@/lib/auth-django'
 
 export default function Page() {
@@ -14,15 +13,13 @@ export default function Page() {
   const [loading, setLoading] = useState(true)
   const [attemptHistory, setAttemptHistory] = useState<any>(null)
   const [copied, setCopied] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-
   const [testDetails, setTestDetails] = useState<any>(null)
 
   const checkAuth = async () => {
     const token = getCookie('access_token')
     const testId = process.env.NEXT_PUBLIC_QUIZ_TEST_ID || '1'
 
-    // Fetch Test Details (publicly or with token)
+    // Fetch Test Details
     try {
       const testResponse = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api'}/company/test/${testId}/`)
       if (testResponse.ok) {
@@ -38,7 +35,6 @@ export default function Page() {
       setUser(djangoUser)
 
       if (djangoUser) {
-        // Fetch submissions from Django backend
         try {
           const response = await fetch(`${process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api'}/candidates/submissions/`, {
             headers: {
@@ -48,17 +44,13 @@ export default function Page() {
           if (response.ok) {
             const responseData = await response.json()
             if (responseData.status && responseData.data) {
-              // Find submission for THIS specific test
               const currentSubmission = responseData.data.find((s: any) => s.test?.id?.toString() === testId || s.id?.toString() === testId) 
-              // Note: submission serialization might vary, checking both id and test.id
-              
               if (currentSubmission) {
                 setAttemptHistory({
                   passed: currentSubmission.flag_verification === 'verified',
                   submission_flag: currentSubmission.submitted_flag,
                   score_percentage: null,
-                  correct_answers: null,
-                  total_questions: 30,
+                  status: currentSubmission.status
                 })
               }
             }
@@ -88,12 +80,6 @@ export default function Page() {
     router.refresh()
   }
 
-  const handleSignInSuccess = async () => {
-    setRefreshing(true)
-    await checkAuth()
-    setRefreshing(false)
-  }
-
   const handleCopyFlag = () => {
     if (attemptHistory?.submission_flag) {
       navigator.clipboard.writeText(attemptHistory.submission_flag)
@@ -116,10 +102,7 @@ export default function Page() {
       <nav className="border-b border-slate-700 bg-slate-900/50 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">Q</span>
-            </div>
-            <span className="text-white font-bold text-lg">Dev Cert</span>
+            <span className="text-white font-bold text-lg">Skill Hunt Assessments</span>
           </div>
           {user && (
             <div className="flex items-center gap-4">
@@ -136,67 +119,24 @@ export default function Page() {
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-16">
-        {/* Show different content based on authentication and completion status */}
-        {!user ? (
-          // Not logged in - show sign-in form
-          <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
-            <div className="space-y-6">
-              <h1 className="text-5xl font-bold text-white leading-tight">
-                {testDetails?.job_title || 'Professional Developer'} <span className="text-blue-400">Certification Quiz</span>
-              </h1>
-              <p className="text-xl text-slate-300">
-                {testDetails?.description || 'Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.'}
-              </p>
-              <div className="space-y-3 mt-6">
-                <p className="text-slate-400 text-sm font-medium">Required Score: 75% (22 out of 30 questions)</p>
-                <p className="text-slate-400 text-sm font-medium">Time Limit: {testDetails?.test_duration_min || 60} minutes</p>
-                <p className="text-slate-400 text-sm font-medium">Important: You can take this test only once. Make sure you are ready before starting.</p>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-2xl opacity-20"></div>
-              <SignInForm onSignInSuccess={handleSignInSuccess} />
-            </div>
-          </div>
-        ) : attemptHistory ? (
-          // Logged in and already completed quiz
-          <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
-            <div className="space-y-6">
-              <h1 className="text-4xl font-bold text-white leading-tight">
-                You&apos;ve Already Completed the Quiz
-              </h1>
-              <p className="text-xl text-slate-300">
-                Thank you for taking our professional developer certification quiz. Your results are final and you cannot retake the test.
-              </p>
-              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 space-y-2">
-                {attemptHistory.score_percentage !== null && (
-                  <p className="text-slate-400 text-sm">
-                    <span className="font-semibold">Score:</span> {attemptHistory.score_percentage}%
-                  </p>
-                )}
-                {attemptHistory.correct_answers !== null && (
-                  <p className="text-slate-400 text-sm">
-                    <span className="font-semibold">Correct Answers:</span> {attemptHistory.correct_answers} / {attemptHistory.total_questions}
-                  </p>
-                )}
-                <p className="text-slate-400 text-sm">
-                  <span className="font-semibold">Status:</span> {attemptHistory.passed ? 'PASSED' : 'FAILED'}
-                </p>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl blur-2xl opacity-20"></div>
+        {attemptHistory ? (
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">
+              Assessment Completed
+            </h1>
+            <p className="text-xl text-slate-300">
+              You have already taken the {testDetails?.job_title || 'Professional Developer'} assessment.
+            </p>
+            
+            <div className="flex justify-center">
               {attemptHistory.passed && attemptHistory.submission_flag ? (
-                <Card className="relative bg-green-900/20 border-green-600 p-8 space-y-6">
+                <Card className="bg-green-900/20 border-green-600 p-8 space-y-6 w-full max-w-md">
                   <div className="text-center space-y-2">
                     <CheckCircle2 className="w-16 h-16 text-green-400 mx-auto" />
                     <h2 className="text-2xl font-bold text-white">Certification Achieved</h2>
                   </div>
-
                   <div className="space-y-3">
                     <p className="text-slate-300 text-center">Your submission flag:</p>
                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
@@ -210,132 +150,109 @@ export default function Page() {
                       {copied ? 'Copied!' : 'Copy Flag'}
                     </Button>
                   </div>
-
-                  <p className="text-sm text-slate-400 text-center">
-                    This flag is unique to your account and will be displayed only this one time.
-                  </p>
                 </Card>
               ) : (
-                <Card className="relative bg-red-900/20 border-red-600 p-8 space-y-6">
-                  <div className="text-center space-y-2">
-                    <CheckCircle2 className="w-16 h-16 text-red-400 mx-auto" />
-                    <h2 className="text-2xl font-bold text-white">Score Below Passing</h2>
-                  </div>
-                  <p className="text-slate-300 text-center">
-                    Your score of {attemptHistory.score_percentage}% is below the required 75% passing grade. Unfortunately, you cannot retake the test.
+                <Card className="bg-slate-800 border-slate-700 p-8 space-y-6 w-full max-w-md text-center">
+                  <CheckCircle2 className="w-16 h-16 text-blue-400 mx-auto" />
+                  <h2 className="text-2xl font-bold text-white">Assessment Recorded</h2>
+                  <p className="text-slate-300">
+                    Your results have been successfully recorded and sent to the Skill Hunt team for review.
                   </p>
                 </Card>
               )}
             </div>
           </div>
         ) : (
-          // Logged in but haven't taken quiz yet
-          <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
+          <div className="max-w-4xl mx-auto text-center space-y-12">
             <div className="space-y-6">
-              <h1 className="text-5xl font-bold text-white leading-tight">
-                Ready to Test Your <span className="text-blue-400">Expertise?</span>
+              <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight">
+                {testDetails?.job_title || 'Professional Developer'} <br/>
+                <span className="text-blue-500">Certification Quiz</span>
               </h1>
-              <p className="text-xl text-slate-300">
-                {testDetails?.description || 'Test your networking and development expertise with 30 challenging questions covering advanced concepts in CCNA-level networking, TCP/IP protocols, routing, and security.'}
+              <p className="text-xl md:text-2xl text-slate-300 leading-relaxed max-w-3xl mx-auto">
+                {testDetails?.description || 'Validate your expertise with our industry-leading assessment. Designed for elite developers who want to showcase their technical mastery.'}
               </p>
-              <div className="space-y-3 mt-6">
-                <p className="text-slate-400 text-sm font-medium">Required Score: 75% (22 out of 30 questions)</p>
-                <p className="text-slate-400 text-sm font-medium">Time Limit: {testDetails?.test_duration_min || 60} minutes</p>
-                <p className="text-slate-400 text-sm font-medium text-orange-400">Important: You can take this test only once. Make sure you are ready before starting.</p>
-              </div>
-              <Button
-                onClick={handleStartQuiz}
-                className="px-8 py-6 text-lg bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Start Test Now
-              </Button>
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-2xl opacity-20"></div>
-              <Card className="relative bg-slate-800 border-slate-700 p-8 space-y-6">
-                <div className="text-center pb-4 border-b border-slate-700">
-                  <h2 className="text-3xl font-bold text-white">Quiz Details</h2>
+            <div className="flex flex-col items-center gap-10">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-3xl mx-auto">
+                <div className="flex flex-col items-center gap-2 p-6 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                  <Clock className="w-8 h-8 text-blue-400" />
+                  <span className="text-white font-semibold">{testDetails?.test_duration_min || 60} Minutes</span>
+                  <span className="text-slate-500 text-xs uppercase tracking-wider">Time Limit</span>
                 </div>
-
-                <div className="space-y-4">
-                  <div className="flex gap-4 items-start">
-                    <BookOpen className="w-6 h-6 text-blue-400 flex-shrink-0 mt-1" />
-                    <div>
-                      <p className="text-slate-400 text-sm">Total Questions</p>
-                      <p className="text-white font-semibold text-lg">30 challenging questions</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <Award className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                    <div>
-                      <p className="text-slate-400 text-sm">Passing Score</p>
-                      <p className="text-white font-semibold text-lg">75% (22 questions)</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <Clock className="w-6 h-6 text-orange-400 flex-shrink-0 mt-1" />
-                    <div>
-                      <p className="text-slate-400 text-sm">Estimated Duration</p>
-                      <p className="text-white font-semibold text-lg">{testDetails?.test_duration_min || 60} minutes</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4 items-start">
-                    <CheckCircle className="w-6 h-6 text-purple-400 flex-shrink-0 mt-1" />
-                    <div>
-                      <p className="text-slate-400 text-sm">Pass Reward</p>
-                      <p className="text-white font-semibold text-lg">Submission Flag (One-time display)</p>
-                    </div>
-                  </div>
+                <div className="flex flex-col items-center gap-2 p-6 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                  <Award className="w-8 h-8 text-green-400" />
+                  <span className="text-white font-semibold">75% Score</span>
+                  <span className="text-slate-500 text-xs uppercase tracking-wider">Required Pass</span>
                 </div>
-              </Card>
+                <div className="flex flex-col items-center gap-2 p-6 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                  <BookOpen className="w-8 h-8 text-purple-400" />
+                  <span className="text-white font-semibold">30 Questions</span>
+                  <span className="text-slate-500 text-xs uppercase tracking-wider">Total Items</span>
+                </div>
+              </div>
+
+              <div className="space-y-4 w-full">
+                <Button
+                  onClick={user ? handleStartQuiz : () => router.push('/auth/login')}
+                  className="w-full max-w-md py-8 text-2xl font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-2xl shadow-2xl shadow-blue-600/20 transition-all hover:scale-105 active:scale-95"
+                >
+                  {user ? 'Start Assessment' : 'Sign In to Begin'}
+                </Button>
+                {!user && (
+                  <p className="text-slate-500 text-sm italic">
+                    Requires a verified Skill Hunt candidate account.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Features */}
-        <div className="grid md:grid-cols-3 gap-6 py-16 border-t border-slate-700">
-          <Card className="bg-slate-800/50 border-slate-700 p-6 hover:bg-slate-800/70 transition">
-            <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center mb-4">
+        {/* Features / Requirements */}
+        <div className="grid md:grid-cols-3 gap-8 py-20 mt-20 border-t border-slate-700/50">
+          <div className="space-y-4">
+            <div className="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center">
               <BookOpen className="w-6 h-6 text-blue-400" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Comprehensive Content</h3>
-            <p className="text-slate-400 text-sm">
-              Questions cover networking protocols, routing algorithms, security concepts, and modern development standards.
+            <h3 className="text-white font-bold text-lg">Elite Curriculum</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Questions are curated by industry experts covering TCP/IP, routing, security protocols, and advanced algorithms.
             </p>
-          </Card>
+          </div>
 
-          <Card className="bg-slate-800/50 border-slate-700 p-6 hover:bg-slate-800/70 transition">
-            <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center mb-4">
+          <div className="space-y-4">
+            <div className="w-12 h-12 bg-purple-600/10 rounded-xl flex items-center justify-center">
               <Award className="w-6 h-6 text-purple-400" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Professional Assessment</h3>
-            <p className="text-slate-400 text-sm">
-              Difficulty level equivalent to CCNA certification exams with real-world networking scenarios.
+            <h3 className="text-white font-bold text-lg">Verified Badge</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Upon successful completion, you receive a unique verification flag that can be added to your Skill Hunt profile.
             </p>
-          </Card>
+          </div>
 
-          <Card className="bg-slate-800/50 border-slate-700 p-6 hover:bg-slate-800/70 transition">
-            <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center mb-4">
+          <div className="space-y-4">
+            <div className="w-12 h-12 bg-green-600/10 rounded-xl flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-green-400" />
             </div>
-            <h3 className="text-white font-semibold mb-2">Instant Verification</h3>
-            <p className="text-slate-400 text-sm">
-              Receive a unique submission flag immediately upon passing to verify your certification.
+            <h3 className="text-white font-bold text-lg">Instant Scoring</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Get your results immediately. Pass the 75% threshold to achieve certification and unlock elite job opportunities.
             </p>
-          </Card>
+          </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="border-t border-slate-700 bg-slate-900/50 backdrop-blur py-8">
-        <div className="max-w-6xl mx-auto px-4 text-center text-slate-400 text-sm">
-          <p>Professional Developer Certification Quiz • Test Your Knowledge Today</p>
+      <footer className="border-t border-slate-700/50 bg-slate-900/50 backdrop-blur py-12">
+        <div className="max-w-6xl mx-auto px-4 text-center space-y-4">
+          <p className="text-slate-400 font-medium">Skill Hunt Assessments &copy; 2026</p>
+          <p className="text-slate-600 text-sm max-w-md mx-auto">
+            This is an official assessment tool for Skill Hunt candidates. All questions and results are property of Skill Hunt.
+          </p>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }
